@@ -1,0 +1,472 @@
+print("[ESP] script running")
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+
+local START_VISIBLE = false
+local VISIBLE_ROWS = 4
+
+local categories = {
+	{
+		label = "Generator Esp",
+		target = "generator",
+		color = Color3.fromRGB(255, 200, 0),
+		modelsOnly = true,
+	},
+	{
+		label = "Baseplate Esp",
+		target = "baseplate",
+		color = Color3.fromRGB(0, 170, 255),
+		modelsOnly = false,
+	},
+	{
+		label = "TOT Door Esp",
+		target = "trickortreatdoor_origin",
+		color = Color3.fromRGB(255, 120, 0),
+		modelsOnly = true,
+	},
+	{
+		label = "Pumpkin Esp",
+		target = "pumpkin",
+		color = Color3.fromRGB(170, 80, 255),
+		modelsOnly = true,
+	},
+	{
+		label = "Twisteds Esp",
+		targets = {
+			"AstroMonster", "BassieMonster", "BlotMonster", "BobetteMonster",
+			"BoxtenMonster", "BrightneyMonster", "BrushaMonster", "CoalMonster",
+			"CocoaMonster", "ConnieMonster", "CosmoMonster", "DandyMonster",
+			"DyleMonster", "EclipseMonster", "EggsonMonster", "FinnMonster",
+			"FlutterMonster", "FlyteMonster", "GigiMonster", "GingerMonster",
+			"GlistenMonster", "GoobMonster", "GourdyMonster", "LooeyMonster",
+			"PebbleMonster", "PoppyMonster", "RibeccaMonster", "RodgerMonster",
+			"RudieMonster", "ScrapsMonster", "ShellyMonster", "ShrimpoMonster",
+			"SoulvesterMonster", "SproutMonster", "SquirmMonster", "TeaganMonster",
+			"TishaMonster", "ToodlesMonster", "VeeMonster", "WaxwellMonster",
+			"YattaMonster",
+		},
+		color = Color3.fromRGB(255, 60, 60),
+		modelsOnly = true,
+	},
+	{
+		label = "Research Capsule Esp",
+		target = "researchcapsule",
+		color = Color3.fromRGB(0, 255, 200),
+		modelsOnly = true,
+	},
+}
+
+for _, cat in ipairs(categories) do
+	cat.names = {}
+	if cat.target then
+		cat.names[cat.target:lower()] = true
+	end
+	if cat.targets then
+		for _, n in ipairs(cat.targets) do
+			cat.names[n:lower()] = true
+		end
+	end
+end
+
+local ROW_HEIGHT = 50
+local TAB_HEIGHT = 40
+local OFF_COLOR = Color3.fromRGB(90, 90, 100)
+local ON_COLOR = Color3.fromRGB(0, 200, 100)
+local TAB_ACTIVE = Color3.new(1, 1, 1)
+local TAB_INACTIVE = Color3.fromRGB(140, 140, 150)
+local tweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+local PANEL_HEIGHT = TAB_HEIGHT + VISIBLE_ROWS * ROW_HEIGHT + 10
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "EspGui"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 999
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.fromOffset(240, PANEL_HEIGHT)
+frame.Position = UDim2.fromScale(0.4, 0.2)
+frame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Visible = START_VISIBLE
+frame.Parent = gui
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(70, 70, 80)
+stroke.Thickness = 1
+stroke.Parent = frame
+
+local tabBar = Instance.new("Frame")
+tabBar.Size = UDim2.new(1, 0, 0, TAB_HEIGHT)
+tabBar.BackgroundTransparency = 1
+tabBar.Parent = frame
+
+local divider = Instance.new("Frame")
+divider.AnchorPoint = Vector2.new(0, 1)
+divider.Position = UDim2.fromScale(0, 1)
+divider.Size = UDim2.new(1, 0, 0, 1)
+divider.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
+divider.BorderSizePixel = 0
+divider.Parent = tabBar
+
+local function createPage()
+	local page = Instance.new("Frame")
+	page.Position = UDim2.fromOffset(0, TAB_HEIGHT)
+	page.Size = UDim2.new(1, 0, 1, -TAB_HEIGHT)
+	page.BackgroundTransparency = 1
+	page.Visible = false
+	page.Parent = frame
+	return page
+end
+
+local espPage = Instance.new("ScrollingFrame")
+espPage.Position = UDim2.fromOffset(0, TAB_HEIGHT + 1)
+espPage.Size = UDim2.new(1, 0, 1, -TAB_HEIGHT - 6)
+espPage.BackgroundTransparency = 1
+espPage.BorderSizePixel = 0
+espPage.Visible = false
+espPage.ScrollingDirection = Enum.ScrollingDirection.Y
+espPage.ScrollBarThickness = 4
+espPage.ScrollBarImageColor3 = Color3.fromRGB(120, 120, 130)
+espPage.CanvasSize = UDim2.new(0, 0, 0, #categories * ROW_HEIGHT + 10)
+espPage.Parent = frame
+
+local navPage = createPage()
+local autoPage = createPage()
+
+local tabs = {}
+
+local function setTab(name)
+	for tabName, t in pairs(tabs) do
+		local active = tabName == name
+		t.page.Visible = active
+		t.underline.Visible = active
+		TweenService:Create(t.button, tweenInfo, {
+			TextColor3 = active and TAB_ACTIVE or TAB_INACTIVE
+		}):Play()
+	end
+end
+
+local TAB_COUNT = 3
+
+local function createTab(name, text, index, page)
+	local button = Instance.new("TextButton")
+	button.Size = UDim2.new(1 / TAB_COUNT, 0, 1, 0)
+	button.Position = UDim2.fromScale((index - 1) / TAB_COUNT, 0)
+	button.BackgroundTransparency = 1
+	button.Text = text
+	button.TextColor3 = TAB_INACTIVE
+	button.Font = Enum.Font.GothamBold
+	button.TextSize = 13
+	button.AutoButtonColor = false
+	button.Parent = tabBar
+
+	local underline = Instance.new("Frame")
+	underline.AnchorPoint = Vector2.new(0.5, 1)
+	underline.Position = UDim2.new(0.5, 0, 1, 0)
+	underline.Size = UDim2.new(0.7, 0, 0, 2)
+	underline.BackgroundColor3 = ON_COLOR
+	underline.BorderSizePixel = 0
+	underline.Visible = false
+	underline.Parent = button
+
+	tabs[name] = { button = button, underline = underline, page = page }
+
+	button.Activated:Connect(function()
+		setTab(name)
+	end)
+end
+
+createTab("esp", "ESP", 1, espPage)
+createTab("nav", "Navigation", 2, navPage)
+createTab("auto", "Automation", 3, autoPage)
+
+local navLabel = Instance.new("TextLabel")
+navLabel.Size = UDim2.new(1, -30, 1, 0)
+navLabel.Position = UDim2.fromOffset(15, 0)
+navLabel.BackgroundTransparency = 1
+navLabel.Text = "Navigation features coming soon"
+navLabel.TextColor3 = TAB_INACTIVE
+navLabel.Font = Enum.Font.Gotham
+navLabel.TextSize = 14
+navLabel.TextWrapped = true
+navLabel.Parent = navPage
+
+local function createToggleRow(parent, index, text, onToggle)
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, ROW_HEIGHT)
+	row.Position = UDim2.fromOffset(0, 5 + (index - 1) * ROW_HEIGHT)
+	row.BackgroundTransparency = 1
+	row.Parent = parent
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(0, 150, 1, 0)
+	label.Position = UDim2.fromOffset(15, 0)
+	label.BackgroundTransparency = 1
+	label.Text = text
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.Font = Enum.Font.GothamBold
+	label.TextSize = 15
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.TextTruncate = Enum.TextTruncate.AtEnd
+	label.Parent = row
+
+	local switch = Instance.new("TextButton")
+	switch.AnchorPoint = Vector2.new(1, 0.5)
+	switch.Position = UDim2.new(1, -18, 0.5, 0)
+	switch.Size = UDim2.fromOffset(46, 24)
+	switch.BackgroundColor3 = OFF_COLOR
+	switch.Text = ""
+	switch.AutoButtonColor = false
+	switch.Parent = row
+	Instance.new("UICorner", switch).CornerRadius = UDim.new(1, 0)
+
+	local knob = Instance.new("Frame")
+	knob.AnchorPoint = Vector2.new(0, 0.5)
+	knob.Position = UDim2.new(0, 3, 0.5, 0)
+	knob.Size = UDim2.fromOffset(18, 18)
+	knob.BackgroundColor3 = Color3.new(1, 1, 1)
+	knob.BorderSizePixel = 0
+	knob.Parent = switch
+	Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+
+	local state = false
+	switch.Activated:Connect(function()
+		local newState = not state
+		if onToggle(newState) == false then return end
+		state = newState
+
+		TweenService:Create(switch, tweenInfo, {
+			BackgroundColor3 = state and ON_COLOR or OFF_COLOR
+		}):Play()
+		TweenService:Create(knob, tweenInfo, {
+			Position = state and UDim2.new(1, -21, 0.5, 0) or UDim2.new(0, 3, 0.5, 0)
+		}):Play()
+	end)
+
+	return label
+end
+
+for i, cat in ipairs(categories) do
+	cat.enabled = false
+	cat.highlights = {}
+	cat.labelObj = createToggleRow(espPage, i, cat.label, function(state)
+		cat.enabled = state
+		for _, h in pairs(cat.highlights) do
+			h.Enabled = state
+		end
+	end)
+end
+
+local calibrationOn = false
+local calibrationRemote = nil
+local originalCallback = nil
+local calibrationHook = function()
+	return "supercomplete"
+end
+
+local function readCallback(remote)
+	if getcallbackvalue then
+		local ok, cb = pcall(getcallbackvalue, remote, "OnClientInvoke")
+		if ok then return cb end
+	end
+	return nil
+end
+
+local function setCalibration(state)
+	if state then
+		local events = ReplicatedStorage:WaitForChild("Events", 3)
+		local remote = events and events:WaitForChild("SkillcheckUpdate", 3)
+		if not remote then
+			warn("[ESP] SkillcheckUpdate not found")
+			return false
+		end
+
+		calibrationRemote = remote
+		originalCallback = readCallback(remote)
+		local ok, err = pcall(function()
+			remote.OnClientInvoke = calibrationHook
+		end)
+		if not ok then
+			warn("[ESP] couldn't set callback:", err)
+			return false
+		end
+		calibrationOn = true
+		print("[ESP] Automatic Calibration ON")
+	else
+		calibrationOn = false
+		if calibrationRemote then
+			pcall(function()
+				calibrationRemote.OnClientInvoke = originalCallback
+			end)
+		end
+		print("[ESP] Automatic Calibration OFF")
+	end
+end
+
+task.spawn(function()
+	while true do
+		task.wait(1)
+		if calibrationOn and calibrationRemote then
+			if readCallback(calibrationRemote) ~= calibrationHook then
+				pcall(function()
+					calibrationRemote.OnClientInvoke = calibrationHook
+				end)
+			end
+		end
+	end
+end)
+
+createToggleRow(autoPage, 1, "Automatic Calibration", setCalibration)
+
+setTab("esp")
+
+local buttonGui = Instance.new("ScreenGui")
+buttonGui.Name = "EspToggleGui"
+buttonGui.ResetOnSpawn = false
+buttonGui.IgnoreGuiInset = true
+buttonGui.DisplayOrder = 1000
+buttonGui.Parent = player:WaitForChild("PlayerGui")
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.fromOffset(50, 50)
+toggleButton.Position = UDim2.new(0, 20, 0.5, 0)
+toggleButton.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+toggleButton.Text = "ESP"
+toggleButton.TextColor3 = Color3.new(1, 1, 1)
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.TextSize = 14
+toggleButton.AutoButtonColor = true
+toggleButton.Active = true
+toggleButton.Parent = buttonGui
+Instance.new("UICorner", toggleButton).CornerRadius = UDim.new(1, 0)
+
+local buttonStroke = Instance.new("UIStroke")
+buttonStroke.Color = Color3.fromRGB(0, 200, 100)
+buttonStroke.Thickness = 2
+buttonStroke.Parent = toggleButton
+
+print("[ESP] GUI built")
+
+local function updateLabel(cat)
+	local count = 0
+	for _ in pairs(cat.highlights) do count += 1 end
+	cat.labelObj.Text = cat.label .. " (" .. count .. ")"
+end
+
+local function addHighlight(obj)
+	for _, cat in ipairs(categories) do
+		if not cat.highlights[obj] and cat.names[obj.Name:lower()] then
+			local valid = obj:IsA("Model") or (not cat.modelsOnly and obj:IsA("BasePart"))
+			if valid then
+				local h = Instance.new("Highlight")
+				h.Adornee = obj
+				h.FillColor = cat.color
+				h.FillTransparency = 0.5
+				h.OutlineColor = Color3.new(1, 1, 1)
+				h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+				h.Enabled = cat.enabled
+				h.Parent = gui
+
+				cat.highlights[obj] = h
+				updateLabel(cat)
+			end
+		end
+	end
+end
+
+local function removeHighlight(obj)
+	for _, cat in ipairs(categories) do
+		local h = cat.highlights[obj]
+		if h then
+			h:Destroy()
+			cat.highlights[obj] = nil
+			updateLabel(cat)
+		end
+	end
+end
+
+task.spawn(function()
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		pcall(addHighlight, obj)
+	end
+	print("[ESP] scan finished")
+end)
+
+workspace.DescendantAdded:Connect(function(obj)
+	pcall(addHighlight, obj)
+end)
+workspace.DescendantRemoving:Connect(removeHighlight)
+
+local dragging, dragStart, startPos
+
+frame.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
+		local relY = input.Position.Y - frame.AbsolutePosition.Y
+		if relY <= TAB_HEIGHT or relY >= frame.AbsoluteSize.Y - 8 then
+			dragging, dragStart, startPos = true, input.Position, frame.Position
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+		or input.UserInputType == Enum.UserInputType.Touch) then
+		local d = input.Position - dragStart
+		frame.Position = UDim2.new(
+			startPos.X.Scale, startPos.X.Offset + d.X,
+			startPos.Y.Scale, startPos.Y.Offset + d.Y
+		)
+	end
+end)
+
+local CLICK_THRESHOLD = 6
+local btnDragging, btnMoved, btnStart, btnStartPos = false, false, nil, nil
+
+toggleButton.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
+		btnDragging, btnMoved = true, false
+		btnStart, btnStartPos = input.Position, toggleButton.Position
+
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				btnDragging = false
+				if not btnMoved then
+					frame.Visible = not frame.Visible
+				end
+			end
+		end)
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if btnDragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+		or input.UserInputType == Enum.UserInputType.Touch) then
+		local d = input.Position - btnStart
+		if d.Magnitude > CLICK_THRESHOLD then
+			btnMoved = true
+		end
+		if btnMoved then
+			toggleButton.Position = UDim2.new(
+				btnStartPos.X.Scale, btnStartPos.X.Offset + d.X,
+				btnStartPos.Y.Scale, btnStartPos.Y.Offset + d.Y
+			)
+		end
+	end
+end)
